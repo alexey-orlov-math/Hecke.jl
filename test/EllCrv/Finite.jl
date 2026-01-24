@@ -129,14 +129,14 @@
       RB,x = finite_field(2, d, "X")
       q = 2^d
 
-      t_1 = Hecke._trace_frobenius_char2_agm(x);
+      t_1 = Hecke._trace_frobenius_char2_agm(x)
       t_prev = 2; t_cur = t_1
       for n in 2:N
         t_cur, t_prev = t_1*t_cur - q*t_prev, t_cur
 
         R,_ = finite_field(2, d*n, "Y")
         z = embed(RB, R)(x)
-        t = Hecke._trace_frobenius_char2_agm(z);
+        t = Hecke._trace_frobenius_char2_agm(z)
 
         if t != t_cur
           println("Wrong frobenius trace for $z over $R ($x over $RB)")
@@ -155,7 +155,7 @@
   end
 
   @testset "AGM (Exhaustive d=3..6)" begin
-    # do a bruteforce enumeration: for a fixed exponent d, enumerate all (non-zero) a_6
+    # do a brute-force enumeration: for a fixed exponent d, enumerate all (non-zero) a_6
     # compare _trace_frobenius_char2_agm to the trace computed from order_via_exhaustive_search
     # note that the order_via_exhaustive_search is pretty slow, so we limit ourselves in the range of d
     function test_agm_exhaustive(max_degree)::Bool
@@ -163,7 +163,7 @@
         R = GF(2, d, "t")
         q = order(R)
         for a6 in R
-          if a6^4 == a6 continue end
+          a6^4 == a6 && continue
           E = elliptic_curve(R, [1,0,0,0,a6])
           if q + 1 - Hecke._trace_frobenius_char2_agm(a6) != Hecke.order_via_exhaustive_search(E)
             println("Wrong point count for ordinary curve $E over $R")
@@ -178,14 +178,14 @@
   end
 
   @testset "Point counting for ordinary curves in characteristic 2 (Exhaustive d=1..6)" begin
-    # do a bruteforce enumeration: for a fixed exponent d, enumerate all (non-zero) a_6
+    # do a brute-force enumeration: for a fixed exponent d, enumerate all (non-zero) a_6
     # compare _order_ordinary_char2 to order_via_exhaustive_search
     # note that the order_via_exhaustive_search is pretty slow, so we need to limit ourselves in the range of d
     function test_ordinary_exhaustive(max_degree)::Bool
       for d in 1:max_degree
         R = GF(2, d, "t")
         for a6 in R
-          if iszero(a6) continue end
+          iszero(a6) && continue
           for a2 in R
             E = elliptic_curve(R, [1,a2,0,0,a6])
             if Hecke._order_ordinary_char2(E) != Hecke.order_via_exhaustive_search(E)
@@ -258,7 +258,7 @@
   end
 
   @testset "Point counting for supersingular curves in characteristic 2 (Exhaustive d=1..4)" begin
-    # do a bruteforce enumeration: for a fixed exponent d, enumerate all a_3,a_4,a_6 with a_3 non-zero
+    # do a brute-force enumeration: for a fixed exponent d, enumerate all a_3,a_4,a_6 with a_3 non-zero
     # compare _order_supersingular_char2 to order_via_exhaustive_search
     # note that the order_via_exhaustive_search is pretty slow, so we need to limit ourselves in the range of d
     function test_supersingular_exhaustive(max_degree)::Bool
@@ -270,6 +270,94 @@
           for (a4, a6) in Iterators.product(R, R)
             E = elliptic_curve(R, [0,0,a3,a4,a6])
             if Hecke._order_supersingular_char2(E) != Hecke.order_via_exhaustive_search(E)
+              println("Wrong point count for supersingular curve $E over $R")
+              return false
+            end
+          end
+        end
+      end
+      return true
+    end
+
+    @test test_supersingular_exhaustive(4)
+  end
+
+  @testset "Point counting for supersingular curves in characteristic 3" begin
+    function _order_of(K::Field, a4, a6)::ZZRingElem
+      return Hecke._order_supersingular_char3(elliptic_curve(elem_type(K)[K(0),K(0),K(0),K(a4),K(a6)]))
+    end
+
+    # the representatives of all isogeny classes with small d
+
+    R2, t = finite_field(3, 2)  # d = 2 mod 4
+    # y^2 = x^3 - x + 1     | 1 4th power: gamma = 1, Tr(1) = -1      | q + 1 - sqrt(q)
+    @test 7 == @inferred _order_of(R2, -1, 1)
+    # y^2 = x^3 - x         | 1 4th power: gamma = 1, Tr(0) = 0       | q + 1 + 2*sqrt(q)
+    @test 16 == @inferred _order_of(R2, -1, 0)
+    # y^2 = x^3 - t^2*x + 1 | t^2 square: gamma = t, Tr(t^(-3)) = -1  | q + 1 + sqrt(q)
+    @test 13 == @inferred _order_of(R2, -t^2, 1)
+    # y^2 = x^3 - t^2*x     | t^2 square: gamma = t, Tr(0) = 0        | q + 1 - 2*sqrt(q)
+    @test 4 == @inferred _order_of(R2, -t^2, 0)
+    # y^2 = x^3 - t*x       | t not a square                          | q + 1
+    @test 10 == @inferred _order_of(R2, -t, 0)
+
+    R3, t = finite_field(3, 3)  # d = 3 mod 4
+    # y^2 = x^3 - x         | 1 4th power: gamma = 1, Tr(0) = 0       | q + 1
+    @test 28 == @inferred _order_of(R3, -1, 0)
+    # y^2 = x^3 - x - t^2   | 1 4th power: gamma = 1, Tr(-t^2) = 1    | q + 1 - sqrt(3*q)
+    @test 19 == @inferred _order_of(R3, -1, -t^2)
+    # y^2 = x^3 - x + t^2   | 1 4th power: gamma = 1, Tr(t^2) = -1    | q + 1 + sqrt(3*q)
+    @test 37 == @inferred _order_of(R3, -1, t^2)
+    # y^2 = x^3 - t*x       | t not a square                          | q + 1
+    @test 28 == @inferred _order_of(R3, -t, 0)
+
+    R4, t = finite_field(3, 4) # d = 0 mod 4
+    # y^2 = x^3 - x + 1     | 1 fourth power: gamma = 1, Tr(1) = 1    | q + 1 + sqrt(q)
+    @test 91 == @inferred _order_of(R4, -1, 1)
+    # y^2 = x^3 - x         | 1 fourth power: gamma = 1, Tr(0) = 0    | q + 1 - 2*sqrt(q)
+    @test 64 == @inferred _order_of(R4, -1, 0)
+    # y^2 = x^3 - t^2*x + t^4 | t^2 square: gamma = t, Tr(t) = 1      | q + 1 - sqrt(q)
+    @test 73 == @inferred _order_of(R4, -t^2, t^4)
+    # y^2 = x^3 - t^2*x     | t^2 square: gamma = t, Tr(0) = 0        | q + 1 + 2*sqrt(q)
+    @test 100 == @inferred _order_of(R4, -t^2, 0)
+    # y^2 = x^3 - t*x       | t not a square                          | q + 1
+    @test 82 == @inferred _order_of(R4, -t, 0)
+
+    R5, t = finite_field(3, 5)  # d = 1 mod 4
+    # y^2 = x^3 - x         | 1 4th power: gamma = 1, Tr(0) = 0       | q + 1
+    @test 244 == @inferred _order_of(R5, -1, 0)
+    # y^2 = x^3 - x - 1     | 1 4th power: gamma = 1, Tr(-1) = 1      | q + 1 + sqrt(3*q)
+    @test 271 == @inferred _order_of(R5, -1, -1)
+    # y^2 = x^3 - x + 1     | 1 4th power: gamma = 1, Tr(1) = -1      | q + 1 - sqrt(3*q)
+    @test 217 == @inferred _order_of(R5, -1, 1)
+    # y^2 = x^3 - t*x       | t not a square                          | q + 1
+    @test 244 == @inferred _order_of(R5, -t, 0)
+
+    # test the coordinates transform
+    # y^2 + xy = x^3 - x^2 + x + 1
+    E1 = elliptic_curve(R2, [1,-1,0,1,1])
+    @test @inferred Hecke._order_supersingular_char3(E1) == @inferred Hecke.order_via_exhaustive_search(E1)
+    E2 = elliptic_curve(R3, [1,-1,0,1,1])
+    @test @inferred Hecke._order_supersingular_char3(E2) == @inferred Hecke.order_via_exhaustive_search(E2)
+    E3 = elliptic_curve(R4, [1,-1,0,1,1])
+    @test @inferred Hecke._order_supersingular_char3(E3) == @inferred Hecke.order_via_exhaustive_search(E3)
+    E4 = elliptic_curve(R5, [1,-1,0,1,1])
+    @test @inferred Hecke._order_supersingular_char3(E4) == @inferred Hecke.order_via_exhaustive_search(E4)
+  end
+
+  @testset "Point counting for supersingular curves in characteristic 3 (Exhaustive d=1..4)" begin
+    # do a brute-force enumeration: for a fixed exponent d, enumerate all a_4,a_6 with a_4 non-zero
+    # compare _order_supersingular_char3 to order_via_exhaustive_search
+    # note that the order_via_exhaustive_search is pretty slow, so we need to limit ourselves in the range of d
+    function test_supersingular_exhaustive(max_degree)::Bool
+      for d in 1:max_degree
+        R = GF(3, d, "t")
+        for a4 in R
+          iszero(a4) && continue
+
+          for a6 in R
+            E = elliptic_curve(R, [0,0,0,a4,a6])
+            if Hecke._order_supersingular_char3(E) != Hecke.order_via_exhaustive_search(E)
               println("Wrong point count for supersingular curve $E over $R")
               return false
             end

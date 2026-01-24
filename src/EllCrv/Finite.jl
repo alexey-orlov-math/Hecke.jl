@@ -895,11 +895,10 @@ end
 # This implements sections 3.4 and 3.5 of Menezes' "Elliptic Curve Public Key Cryptosystems"
 function _order_supersingular_char2(E::EllipticCurve{T}) where T <: FinFieldElem
   R = base_field(E)
-  _, X = polynomial_ring(R,"X")
+  _, X = polynomial_ring(R, "X")
 
   @req characteristic(R) == 2 "Characteristic must be 2"
-  @req iszero(j_invariant(E)) "Curve must be supersingular (j not zero)"
-  @req iszero(E.a_invariants[1]) "Curve must be supersingular (a_1 not zero)"
+  @req iszero(j_invariant(E)) "Curve must be supersingular"
 
   q = order(R)
   d = degree(R)
@@ -943,7 +942,7 @@ function _order_supersingular_char2(E::EllipticCurve{T}) where T <: FinFieldElem
     ss = roots(X^4 + X + a4 + one(R))
     @assert !isempty(ss)
 
-    sqrt_2q = ZZ(2)^divexact(d+1,2)
+    sqrt_2q = ZZ(2)^divexact(d + 1, 2)
     if iszero(tr(ss[1]^6 + ss[1]^2 + a6))
       return mod(d, 8) in (1, 7) ? q + 1 + sqrt_2q : q + 1 - sqrt_2q
     else
@@ -1044,13 +1043,13 @@ function _trace_frobenius_char2_agm(a6::T) where T <: FinFieldElem
   for k in 5:N  # get k correct digits
     # iteration: z <- [1 + z] / [2 * sqrt(z)] = [(1+z)/2] / sqrt(z)
     setprecision!(z, k+1) # we divide by 2 below so we need extra digit
-    z = divexact(shift_right(Qq(1,precision=k+1) + z, 1), sqrt(z))
+    z = divexact(shift_right(Qq(1, precision=k+1) + z, 1), sqrt(z))
     setprecision!(z, k) # we have z modulo 2^k
   end
 
   # we need Norm(2z / [1+z]) = Norm(z / ([1+z]/2) )
   setprecision!(z, N+1) # we divide by 2 below so we need extra digit
-  zz = shift_right(Qq(1,precision=N+1) + z, 1)
+  zz = shift_right(Qq(1, precision=N+1) + z, 1)
 
   norm_z = norm(divexact(z, zz))
   setprecision!(norm_z, N-1) # we have norm modulo 2^(N-1)
@@ -1116,6 +1115,68 @@ function _order_ordinary_char2(E::EllipticCurve{T}) where T <: FinFieldElem
   end
 
   return iszero(tr(a2)) ? q + 1 - trace_frob : q + 1 + trace_frob
+end
+
+################################################################################
+#
+#  Point counting in characteristic 3
+#
+################################################################################
+
+# finds order of a supersingular elliptic curve defined over finite field of characteristic 3
+# since I was not able to find a definitive source on it, I have created a short report
+# arxiv: [TBD]
+function _order_supersingular_char3(E::EllipticCurve{T}) where T <: FinFieldElem
+  R = base_field(E)
+
+  @req characteristic(R) == 3 "Characteristic must be 3"
+  @req iszero(j_invariant(E)) "Curve must be supersingular"
+
+  q = order(R)
+  d = degree(R)
+
+  # transform to canonical supersingular form: y^2 = x^3 + a_4*x + a_6
+  # change of variables (x,y) -> (x,[y-a_1x-a_3]/2)
+  # transforms into y^2 = x^3 + b_2*x^2 - b_4*x + b_6 (with b_2 = 0)
+  # where b_i are the usual values
+  a4 = -(2*E.a_invariants[4] + E.a_invariants[1]*E.a_invariants[3])
+  a6 = E.a_invariants[3]^2 + E.a_invariants[5]
+
+  # for d odd, being a square and a being fourth power are equivalent
+  # considering gamma (sqrt of -a_4) for d odd, allows us to unify implementation
+  a4_square, gamma = Nemo.is_square_with_sqrt(-a4)
+  if !a4_square
+    return q + 1
+  end
+
+  # trace of b in representative y^2 = x^3 - x + b (if gamma is a square)
+  # or trace of b in twist y^2 = x^3 - x + b (if gamma is not a square)
+  trace_b = tr(a6*inv(gamma^3))
+
+  if isodd(d)
+    # of course there is a catch to the above:
+    # only one of {gamma, -gamma} is a square (giving rise to a fourth root of -a_4)
+    # if gamma is not a square, gamma^3 has opposite sign to v^6, where v^4 = -a_4
+    gamma_square, _ = Nemo.is_square_with_sqrt(gamma)
+    if !gamma_square
+      trace_b = -trace_b
+    end
+
+    sqrt_3q = ZZ(3)^divexact(d + 1, 2)
+    if iszero(trace_b)
+      return q + 1
+    else
+      return mod(d, 4) == (isone(trace_b) ? 1 : 3) ? q + 1 + sqrt_3q : q + 1 - sqrt_3q
+    end
+  else
+    sqrt_q = ZZ(3)^divexact(d, 2)
+    typeI, _ = Nemo.is_square_with_sqrt(gamma)
+    if iszero(trace_b)
+      return mod(d, 4) == (typeI ? 2 : 0) ? q + 1 + ZZ(2)*sqrt_q : q + 1 - ZZ(2)*sqrt_q
+    else
+      return mod(d, 4) == (typeI ? 0 : 2) ? q + 1 + sqrt_q : q + 1 - sqrt_q
+    end
+  end
 end
 
 ################################################################################
